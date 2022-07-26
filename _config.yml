@@ -1,5 +1,0 @@
-[[redirects]]
-  to = "/new-path"
-  status = 404
-  force = false
-  query = {path = ":path"}
