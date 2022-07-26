@@ -1,0 +1,151 @@
+new WOW().init();
+var url = window.location.href;
+var arr = url.split("/");
+var DURL = arr[2];
+var pchange = 0;
+solutions(1);
+
+$('#toTop').click(function() {
+	$('body,html').animate({scrollTop:0},800);
+});
+
+function ChangePrice12() {
+	var changePrice1 = document.getElementById("changePrice1").innerText;
+	var changePrice2 = document.getElementById("changePrice2").innerText;
+	var changePrice3 = document.getElementById("changePrice3").innerText;
+	$('#pchange1').removeClass("active");
+	$('#pchange12').addClass("active");
+	if(pchange == 0) {
+		$('#changePrice1').html(changePrice1 * 12);
+		$('#changePrice2').html(changePrice2 * 12);
+		$('#changePrice3').html(changePrice3 * 12);
+		pchange = 1;
+	}
+}
+
+function ChangePrice1() {
+	var changePrice1 = document.getElementById("changePrice1").innerText;
+	var changePrice2 = document.getElementById("changePrice2").innerText;
+	var changePrice3 = document.getElementById("changePrice3").innerText;
+	$('#pchange12').removeClass("active");
+	$('#pchange1').addClass("active");
+	if(pchange == 1) {
+		$('#changePrice1').html(changePrice1 / 12);
+		$('#changePrice2').html(changePrice2 / 12);
+		$('#changePrice3').html(changePrice3 / 12);
+		pchange = 0;
+	}
+}
+
+$('.contact_form_btn').click(function() {
+	$('.contact_form_btn').css({"pointer-events": "none", 'filter': "grayscale(100%)"});
+	var myname = $('#feedback_name').val();
+	var myemail = $('#feedback_email').val();
+	var myreviews = $('#feedback_reviews').val();
+	$.post("//"+DURL+"/ajax/reviews", { myname: myname, myemail: myemail, myreviews: myreviews }, function(data) {
+		$(".feedback_out").html(data);
+	})
+});
+
+function solutions(text_num) {
+	$.post("//"+DURL+"/ajax/descr_main", { text_num: text_num }, function(data) {
+		$(".solutions_body_text").html(data);
+	})
+}
+
+function processOrder(productId, type, showSystems = true) {
+	let htmlSystems = '';
+
+	if (showSystems) {
+		htmlSystems = '<div class="col-md-6 form-group">' +
+			'<select id="swal-system" class="form-control">' +
+			'<option value="CentOS-6-amd64">CentOS-6-amd64</option>' +
+			'<option value="CentOS-7-amd64">CentOS-7-amd64</option>' +
+			'<option value="Debian-10-x86_64">Debian-10-x86_64</option>' +
+			'<option value="Debian-8-x86_64">Debian-8-x86_64</option>' +
+			'<option value="Debian-9-x86_64">Debian-9-x86_64</option>' +
+			'<option value="Ubuntu-14.04-amd64">Ubuntu-14.04-amd64</option>' +
+			'<option value="Ubuntu-16.04-amd64">Ubuntu-16.04-amd64</option>' +
+			'<option value="Ubuntu-18.04-amd64">Ubuntu-18.04-amd64</option>' +
+			'<option value="Windows-Server-2012-R2">Windows-Server-2012-R2</option>' +
+			'<option value="Windows-Server-2016">Windows-Server-2016</option>' +
+			'<option value="Windows-Server-2019">Windows-Server-2019</option>' +
+			'</select>' +
+			'</div>';
+	}
+
+	swal.fire({
+		title: 'Введите вашу электронную почту',
+		html: '<div class="row">' +
+			'<div class="col-md-12 form-group w-100">' +
+			'<input type="email" id="swal-email" class="form-control form-control-lg" placeholder="example@spacecore.pro">' +
+			'</div>' +
+			htmlSystems +
+			'<div class="form-group col-md-6"><input min="1" id="swal-quantity" class="form-control" type="number" name="quantity" placeholder="Количество"></div>' +
+		    '<small>На данный момент, обработка заказов занимает до 48 часов. Нажимая кнопку «Заказать», Вы соглашаетесь с <a href="https://spacecore.pro/page/documents">политикой конфиденциальности, публичной офертой и соглашением о предоставлениие услуг</a></small>' +
+			'</div>',
+		showCancelButton: true,
+		cancelButtonText: 'Отмена',
+		confirmButtonText: 'Заказать',
+		confirmButtonColor: '#3c00be',
+		showLoaderOnConfirm: true,
+		allowOutsideClick: () => !Swal.isLoading(),
+		preConfirm: () => {
+			let email = $('#swal-email').val();
+			let system = $('#swal-system').val();
+			let quantity = $('#swal-quantity').val();
+
+			let data = {
+				email: email,
+				id: productId,
+				type: type,
+				system: system,
+				quantity: quantity,
+			};
+
+			fetch(`//${window.location.hostname}/spacepay/?createorder=1`,
+				{
+					method: 'POST',
+					headers: {
+						'Accept': 'application/json',
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(data),
+				})
+				.then(response => {
+					return response.json();
+
+				}).then(function (res) {
+					let params = res.data;
+
+					if (res.status === 'error') {
+						throw params.message;
+					}
+
+					if (params.order_id === undefined) {
+						throw 'Заказ не создан';
+					}
+
+					var payment = new UnitPay();
+					payment.createWidget({
+						publicKey: params.public_key,
+						sum: params.product_price,
+						account: params.order_id,
+						signature: params.signature,
+						desc: 'Оплата заказа на сайте spacecore.pro',
+						currency: 'rub'
+					});
+					payment.success(function (params) {
+						swal.fire('Успешно', 'Заказ успешно оплачен и будет обработан в течении 48 часов', 'success')
+					});
+					payment.error(function (message, params) {
+						throw new Error('Во время оплаты произошла ошибка');
+					});
+			})
+				.catch(function (error, m) {
+					console.log(error, m);
+					Swal.fire('Ошибка', 'Произошла ошибка: ' + error, 'error');
+				})
+		}
+	})
+}
